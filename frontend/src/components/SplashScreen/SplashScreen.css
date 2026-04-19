@@ -1,0 +1,272 @@
+/* ── Splash Screen ─────────────────────────────────────────────────────── */
+
+.splash-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.5s ease;
+  overflow: hidden;
+}
+
+.splash-overlay.splash-in {
+  opacity: 1;
+}
+
+.splash-overlay.splash-out {
+  opacity: 0;
+  transform: scale(1.03);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+/* ── Ambient orbs ── */
+.splash-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  animation: orb-drift 8s ease-in-out infinite alternate;
+}
+
+.splash-orb-1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(92, 214, 160, 0.12), transparent 70%);
+  top: -200px;
+  left: -200px;
+  animation-delay: 0s;
+}
+
+.splash-orb-2 {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.1), transparent 70%);
+  bottom: -150px;
+  right: -150px;
+  animation-delay: 3s;
+}
+
+.splash-orb-3 {
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(245, 166, 91, 0.08), transparent 70%);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation-delay: 1.5s;
+}
+
+@keyframes orb-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(30px, -20px) scale(1.05); }
+}
+
+/* ── Content ── */
+.splash-content {
+  position: relative;
+  z-index: 1;
+  max-width: 560px;
+  width: 100%;
+  padding: 48px 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  text-align: center;
+  animation: splash-fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+@keyframes splash-fade-up {
+  from { opacity: 0; transform: translateY(28px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Logo row ── */
+.splash-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.splash-icon-badge {
+  font-size: 40px;
+  width: 68px;
+  height: 68px;
+  background: rgba(92, 214, 160, 0.08);
+  border: 1px solid rgba(92, 214, 160, 0.2);
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 0 30px rgba(92, 214, 160, 0.1);
+}
+
+.splash-wordmark {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.splash-name {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1;
+}
+
+.splash-tagline {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* ── Headline ── */
+.splash-headline {
+  font-size: clamp(36px, 6vw, 52px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  color: #fff;
+  margin: 0;
+}
+
+.splash-headline-accent {
+  background: linear-gradient(120deg, #5cd6a0, #81e6b9, #a78bfa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.splash-sub {
+  font-size: 15px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.45);
+  max-width: 420px;
+  margin: 0;
+}
+
+/* ── Feature cards ── */
+.splash-features {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  width: 100%;
+}
+
+.splash-feature-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  text-align: left;
+  animation: splash-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.splash-feature-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(92, 214, 160, 0.2);
+}
+
+.sf-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+
+.sf-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sf-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.sf-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  line-height: 1.4;
+}
+
+/* ── CTA ── */
+.splash-cta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 40px;
+  background: linear-gradient(135deg, #5cd6a0, #3db882);
+  border: none;
+  border-radius: 100px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #000;
+  cursor: pointer;
+  letter-spacing: -0.01em;
+  box-shadow: 0 0 40px rgba(92, 214, 160, 0.25), 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.splash-cta::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0);
+  transition: background 0.2s ease;
+}
+
+.splash-cta:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 0 60px rgba(92, 214, 160, 0.35), 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.splash-cta:hover::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.splash-cta:active {
+  transform: scale(0.98);
+}
+
+.splash-cta-arrow {
+  font-size: 18px;
+  transition: transform 0.2s ease;
+}
+
+.splash-cta:hover .splash-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* ── Footnote ── */
+.splash-footnote {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.2);
+  letter-spacing: 0.03em;
+  margin: 0;
+}
+
+/* ── Responsive ── */
+@media (max-width: 500px) {
+  .splash-features {
+    grid-template-columns: 1fr;
+  }
+  .splash-content {
+    padding: 32px 20px;
+  }
+}

@@ -22,11 +22,16 @@
   font-size: 24px;
 }
 
-.progress-bar-subtle {
+.progress-bar-subtle, .progress-bar-premium {
   height: 6px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 3px;
   overflow: hidden;
+}
+
+.progress-bar-premium {
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .progress-fill {
@@ -99,3 +104,8 @@
   padding-bottom: 40px;
   border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+.text-red { color: var(--accent-red) !important; }
+.text-green { color: var(--accent-green) !important; }
+.text-gold { color: var(--accent-orange) !important; }
+.text-purple { color: var(--accent-purple) !important; }

@@ -92,3 +92,13 @@ def upsert_behavior_survey(
     session.refresh(survey)
     return survey
 
+
+@router.delete("/{participant_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_participant(
+    participant_id: str, session: Session = Depends(get_session)
+) -> None:
+    participant = session.get(Participant, participant_id)
+    if participant is None:
+        raise HTTPException(status_code=404, detail="Participant not found")
+    session.delete(participant)
+    session.commit()

@@ -37,6 +37,7 @@ FEATURE_COLUMNS = [
 class SequenceSample:
     participant_id: str
     features: np.ndarray
+    static_features: np.ndarray | None
     risk_target: float
     archetype_target: int
     spend_target: float
@@ -53,17 +54,30 @@ def build_sequence_samples(frame: pd.DataFrame, seq_len: int = 30) -> list[Seque
         if archetype not in ARCHETYPE_TO_INDEX:
             continue
 
+        feature_spread = ["stress_level", "exam_pressure", "social_pressure", "mood_energy", "sleep_hours"]
+        group[feature_spread] = group[feature_spread].ffill()
         valid_group = group.fillna(0)
-        if len(valid_group) < seq_len:
-            continue
 
-        for end_idx in range(seq_len - 1, len(valid_group)):
+        for end_idx in range(len(valid_group)):
             target_row = valid_group.iloc[end_idx]
-            window = valid_group.iloc[end_idx - seq_len + 1 : end_idx + 1]
+            start_idx = max(0, end_idx - seq_len + 1)
+            window = valid_group.iloc[start_idx : end_idx + 1]
+            features = window[FEATURE_COLUMNS].to_numpy(dtype=np.float32)
+
+            if len(features) < seq_len:
+                pad_width = seq_len - len(features)
+                features = np.pad(features, ((pad_width, 0), (0, 0)), mode="constant", constant_values=0.0)
+
+            # Extract base generic static representation (e.g. onboarding baseline)
+            static_array = np.zeros(1, dtype=np.float32)
+            if "estimated_balance" in target_row:
+                static_array = np.array([target_row["estimated_balance"]], dtype=np.float32)
+
             samples.append(
                 SequenceSample(
                     participant_id=participant_id,
-                    features=window[FEATURE_COLUMNS].to_numpy(dtype=np.float32),
+                    features=features,
+                    static_features=static_array,
                     risk_target=float(target_row["risk_label_14d"]),
                     archetype_target=ARCHETYPE_TO_INDEX[archetype],
                     spend_target=float(np.log1p(target_row["spend_next_7d"])),
@@ -100,10 +114,13 @@ class MultiTaskSequenceDataset(Dataset):
 
     def __getitem__(self, index: int) -> dict[str, torch.Tensor]:
         sample = self.samples[index]
-        return {
+        output = {
             "features": torch.tensor(sample.features, dtype=torch.float32),
             "risk_target": torch.tensor(sample.risk_target, dtype=torch.float32),
             "archetype_target": torch.tensor(sample.archetype_target, dtype=torch.long),
             "spend_target": torch.tensor(sample.spend_target, dtype=torch.float32),
         }
+        if sample.static_features is not None:
+             output["static_features"] = torch.tensor(sample.static_features, dtype=torch.float32)
+        return output
 

@@ -1,28 +1,32 @@
 import { useState } from 'react';
-import type { ExpenseCategory, CashflowCategory } from '../types/api';
+import type { ExpenseCategory, CashflowCategory, DashboardSummary } from '../types/api';
 import {
-  createExpense, createCashflow, createCheckin, importSms,
+  createExpense, createCashflow, createCheckin, importSms, getDashboard,
 } from '../lib/api';
 
 /* ============================================================
    Log Page — quick expense & income entry, check-in, SMS import
    ============================================================ */
 
-interface Props { participantId: string | null; }
+interface Props {
+  participantId: string | null;
+  onDataChanged?: () => void;
+}
 
 const EXPENSE_CATEGORIES: ExpenseCategory[] = [
   'food', 'transport', 'entertainment', 'shopping', 'education',
   'health', 'utilities', 'subscription', 'travel', 'social', 'emergency', 'other',
 ];
 const CASHFLOW_CATEGORIES: CashflowCategory[] = [
-  'allowance', 'part_time_job', 'scholarship', 'freelance', 'refund', 'gift', 'other',
+  'allowance', 'salary', 'freelance', 'scholarship', 'refund', 'transfer', 'other',
 ];
 
 const EMOJIS = ['😌', '😐', '😰', '😫', '🤯'];
 
-export default function LogPage({ participantId }: Props) {
-  const [tab, setTab] = useState<'expense' | 'income' | 'checkin' | 'sms'>('expense');
+export default function LogPage({ participantId, onDataChanged }: Props) {
+  const [tab, setTab] = useState<'sms' | 'expense' | 'income' | 'checkin'>('sms');
   const [status, setStatus] = useState('');
+  const [impactSummary, setImpactSummary] = useState<string[] | null>(null);
 
   // Expense form
   const [expAmount, setExpAmount] = useState('');
@@ -52,6 +56,68 @@ export default function LogPage({ participantId }: Props) {
   const [smsText, setSmsText] = useState('');
   const [smsResult, setSmsResult] = useState<{ count: number; errors: string[] } | null>(null);
 
+  // ── Smart impact preview ─────────────────────────────────────────────────
+  const showImpact = async (type: 'expense' | 'income') => {
+    if (!participantId) return;
+    try {
+      const d: DashboardSummary = await getDashboard(participantId);
+      const lines: string[] = [];
+
+      // Budget snapshot
+      const budgetPct = d.budget_used_pct;
+      lines.push(`📊 Budget now ${budgetPct.toFixed(0)}% used — ₹${d.budget_remaining.toFixed(0)} remaining`);
+
+      // Daily/weekly allowances
+      lines.push(`📅 New daily allowance: ₹${d.target_daily_budget.toFixed(0)}/day | Weekly: ₹${d.target_weekly_budget.toFixed(0)}`);
+
+      // Today's spend vs limit
+      if (d.today_spend > d.target_daily_budget && d.target_daily_budget > 0) {
+        const overage = d.today_spend - d.target_daily_budget;
+        lines.push(`⚠️ Today's spend (₹${d.today_spend.toFixed(0)}) is ₹${overage.toFixed(0)} over your daily limit`);
+      }
+
+      // Weekly check
+      if (d.current_week_spend > d.target_weekly_budget && d.target_weekly_budget > 0) {
+        lines.push(`🔴 Weekly budget exceeded — ₹${d.current_week_spend.toFixed(0)} vs ₹${d.target_weekly_budget.toFixed(0)} limit`);
+      }
+
+      // Risk band change
+      if (d.risk_band === 'critical') {
+        lines.push(`🚨 RISK: Critical — funds may run out before month-end!`);
+      } else if (d.risk_band === 'elevated') {
+        lines.push(`⚠️ RISK: Elevated — tighten daily spend to ₹${d.target_daily_budget.toFixed(0)}`);
+      }
+
+      // Recovery tips from backend
+      if (d.recovery_plan && d.recovery_plan.length > 0) {
+        lines.push('');
+        lines.push('💡 Recovery Plan:');
+        d.recovery_plan.forEach((step) => {
+          // If the step already starts with an emoji, don't add the arrow prefix
+          if (/^[\uD800-\uDBFF][\uDC00-\uDFFF]/.test(step) || step.startsWith('→')) {
+             lines.push(`  ${step}`);
+          } else {
+             lines.push(`  → ${step}`);
+          }
+        });
+      }
+
+      // Positive reinforcement for income
+      if (type === 'income') {
+        lines.push('');
+        lines.push('✅ Your daily and weekly allowances have increased!');
+        if (d.risk_band === 'stable') {
+          lines.push('💚 Risk is stable — consider saving the surplus!');
+        }
+      }
+
+      setImpactSummary(lines);
+      setTimeout(() => setImpactSummary(null), 10000); // auto-dismiss after 10s
+    } catch {
+      // Non-critical — don't block the user
+    }
+  };
+
   if (!participantId) {
     return (
       <div className="empty-state">
@@ -74,6 +140,8 @@ export default function LogPage({ participantId }: Props) {
       });
       setExpAmount(''); setExpMerchant(''); setExpNote('');
       setStatus('✅ Expense logged!');
+      onDataChanged?.();
+      showImpact('expense');
       setTimeout(() => setStatus(''), 3000);
     } catch { setStatus('❌ Failed to log expense'); }
   };
@@ -89,6 +157,8 @@ export default function LogPage({ participantId }: Props) {
       });
       setCfAmount(''); setCfNote('');
       setStatus('✅ Income logged!');
+      onDataChanged?.();
+      showImpact('income');
       setTimeout(() => setStatus(''), 3000);
     } catch { setStatus('❌ Failed to log income'); }
   };
@@ -108,6 +178,7 @@ export default function LogPage({ participantId }: Props) {
         notes: ciNotes || undefined,
       });
       setStatus('✅ Check-in saved!');
+      onDataChanged?.();
       setTimeout(() => setStatus(''), 3000);
     } catch (err: any) {
       console.error(err);
@@ -129,6 +200,7 @@ export default function LogPage({ participantId }: Props) {
       setSmsResult({ count: res.parsed_count, errors: res.errors });
       setSmsText('');
       setStatus(`✅ Imported ${res.parsed_count} transactions`);
+      onDataChanged?.();
       setTimeout(() => setStatus(''), 3000);
     } catch { setStatus('❌ SMS import failed'); }
   };
@@ -161,13 +233,57 @@ export default function LogPage({ participantId }: Props) {
         </div>
       )}
 
+      {/* Smart impact summary */}
+      {impactSummary && (
+        <div
+          className="glass-panel"
+          style={{
+            marginBottom: 20,
+            padding: '16px 20px',
+            background: 'rgba(92,214,160,0.06)',
+            border: '1px solid rgba(92,214,160,0.2)',
+            animation: 'slideUp 0.3s ease',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <strong style={{ fontSize: 13, letterSpacing: '0.03em' }}>📊 Dashboard Impact</strong>
+            <button
+              onClick={() => setImpactSummary(null)}
+              style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', cursor: 'pointer', fontSize: 16 }}
+            >✕</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {impactSummary.map((line, i) => {
+              if (line === '') return <div key={i} style={{ height: 6 }} />;
+              const isWarning = line.includes('⚠️') || line.includes('🔴') || line.includes('🚨');
+              const isRecovery = line.includes('💡') || line.startsWith('  →');
+              const isGood = line.includes('✅') || line.includes('💚');
+              return (
+                <div
+                  key={i}
+                  style={{
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    color: isWarning ? '#f5a65b' : isRecovery ? 'rgba(255,255,255,0.85)' : isGood ? '#5cd6a0' : 'rgba(255,255,255,0.7)',
+                    fontWeight: line.includes('Recovery Plan') ? 600 : 400,
+                    paddingLeft: line.startsWith('  →') ? 8 : 0,
+                  }}
+                >
+                  {line}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Tab switcher */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
         {[
-          { id: 'expense' as const, label: '💸 Expense', },
+          { id: 'sms' as const, label: '📱 Smart Import (SMS)' },
+          { id: 'expense' as const, label: '💸 Manual Expense', },
           { id: 'income' as const, label: '💰 Income' },
-          { id: 'checkin' as const, label: '📋 Check-in' },
-          { id: 'sms' as const, label: '📱 SMS Import' },
+          { id: 'checkin' as const, label: '📋 Reflection' },
         ].map((t) => (
           <button
             key={t.id}
@@ -254,7 +370,7 @@ export default function LogPage({ participantId }: Props) {
       {/* Check-in tab */}
       {tab === 'checkin' && (
         <div className="glass-panel">
-          <h3 style={{ marginBottom: 20 }}>Daily Check-In</h3>
+          <h3 style={{ marginBottom: 20 }}>Weekly Reflection</h3>
           <form className="form-grid" onSubmit={handleCheckin}>
             <div className="form-group">
               <label className="form-label">Date</label>

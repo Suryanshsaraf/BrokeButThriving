@@ -114,6 +114,110 @@ def build_dashboard(session: Session, participant_id: str) -> DashboardSummary:
     days_left = max(1, monthrange(today.year, today.month)[1] - today.day + 1)
     risk_score, risk_band = _risk_from_projection(current_balance, avg_daily_spend_14d, days_left)
 
+    # Tactical Calculations & AI Forecasting
+    start_of_week = today - timedelta(days=today.weekday())
+    today_spend = round(sum(item.amount for item in expenses if _coerce_utc(item.occurred_at).date() == today), 2)
+    current_week_spend = round(sum(item.amount for item in expenses if _coerce_utc(item.occurred_at).date() >= start_of_week), 2)
+
+    monthly_budget = participant.monthly_budget
+    # "Organic" budget shrinking: we calculate the limit based on what was remaining at the start of the day
+    # so that spending today doesn't unfairly shrink today's limit.
+    # We also explicitly include extra cashflows to increase the allowance capacity dynamically.
+    effective_budget = monthly_budget + max(0.0, current_month_inflow - (participant.monthly_income or 0)) 
+    spend_before_today = max(0.0, current_month_spend - today_spend)
+    dynamic_budget_remaining_start_of_day = max(0.0, effective_budget - spend_before_today)
+    
+    target_daily_budget = round(dynamic_budget_remaining_start_of_day / days_left, 2) if effective_budget > 0 and days_left > 0 else 0
+    
+    days_left_in_week = 7 - today.weekday()
+    target_weekly_budget = round(target_daily_budget * days_left_in_week, 2) if effective_budget > 0 else 0
+    days_elapsed = max(1, monthrange(today.year, today.month)[1] - days_left)
+    projected_days_remaining = 99 if avg_daily_spend_14d == 0 else max(0, int(current_balance / avg_daily_spend_14d))
+
+    dynamic_budget_remaining = max(0.0, effective_budget - current_month_spend)
+    budget_remaining = round(effective_budget - current_month_spend, 2)
+    short_term_forecasts: list[str] = []
+
+    # ── Velocity-adjusted limit (organic shrinking) ──────────────────────────
+    velocity_offset = 0.0
+    if avg_daily_spend_14d > target_daily_budget > 0:
+        velocity_offset = (avg_daily_spend_14d - target_daily_budget) * 0.2
+        conservative_limit = max(0, target_daily_budget - velocity_offset)
+        if velocity_offset > 50:
+            short_term_forecasts.append(
+                f"Your 14-day velocity is ₹{avg_daily_spend_14d:.0f}/day — {((avg_daily_spend_14d/target_daily_budget-1)*100):.0f}% above your ₹{target_daily_budget:.0f} limit. "
+                f"Tactical ceiling: ₹{conservative_limit:.0f}/day to protect end-of-month runway."
+            )
+
+    # ── Today vs limit ───────────────────────────────────────────────────────
+    if target_daily_budget > 0 and today_spend > target_daily_budget:
+        overage = today_spend - target_daily_budget
+        new_safe_daily = round((dynamic_budget_remaining - overage) / max(1, days_left - 1), 0)
+        if new_safe_daily > 0:
+            short_term_forecasts.append(
+                f"Today: ₹{today_spend:.0f} spent (₹{overage:.0f} over limit). "
+                f"Spend ≤ ₹{new_safe_daily:.0f}/day for the next {days_left - 1} days to recover."
+            )
+        else:
+            short_term_forecasts.append(
+                "🚨 Budget fully exhausted for this month. Zero headroom left — defer all non-essential purchases."
+            )
+    elif target_daily_budget > 0:
+        unspent = target_daily_budget - today_spend
+        if today_spend == 0:
+            short_term_forecasts.append(
+                f"Zero spend today! That's a full ₹{target_daily_budget:.0f} saved vs your daily limit. "
+                f"Your current runway extends to {projected_days_remaining} days."
+            )
+        elif today_spend < target_daily_budget * 0.5:
+            short_term_forecasts.append(
+                f"Great discipline today — ₹{unspent:.0f} unused from your ₹{target_daily_budget:.0f} allowance. "
+                f"Every surplus day extends your month-end runway."
+            )
+        else:
+            short_term_forecasts.append(
+                f"Target: ₹{target_daily_budget:.0f}/day → you've used ₹{today_spend:.0f} so far. "
+                f"₹{unspent:.0f} remaining today to stay on track for ₹{monthly_budget:.0f}/month."
+            )
+
+    # ── Weekly velocity ──────────────────────────────────────────────────────
+    if current_week_spend > target_weekly_budget * 0.8 and days_left_in_week > 2 and target_weekly_budget > 0:
+        short_term_forecasts.append(
+            f"Weekly pace: ₹{current_week_spend:.0f} of ₹{target_weekly_budget:.0f} used with "
+            f"{days_left_in_week} days left. You need ≤ ₹{(target_weekly_budget - current_week_spend) / max(1, days_left_in_week):.0f}/day to stay in band."
+        )
+
+    # ── Month progress ───────────────────────────────────────────────────────
+    days_elapsed = max(1, monthrange(today.year, today.month)[1] - days_left)
+    expected_spend_by_now = (monthly_budget / max(1, monthrange(today.year, today.month)[1])) * days_elapsed if monthly_budget > 0 else 0
+    if expected_spend_by_now > 0 and current_month_spend > expected_spend_by_now:
+        lead_pct = ((current_month_spend - expected_spend_by_now) / expected_spend_by_now) * 100
+        short_term_forecasts.append(
+            f"Spend pace is running {lead_pct:.0f}% ahead of the calendar — you've used ₹{current_month_spend:.0f} "
+            f"when the expected pace projects ₹{expected_spend_by_now:.0f} by day {days_elapsed}."
+        )
+    elif expected_spend_by_now > 0 and current_month_spend < expected_spend_by_now * 0.7:
+        saving_vs_pace = expected_spend_by_now - current_month_spend
+        short_term_forecasts.append(
+            f"You're ₹{saving_vs_pace:.0f} under the expected monthly pace — excellent! "
+            f"At this rate you'll finish the month with ₹{budget_remaining:.0f} to spare."
+        )
+
+    # ── Income gap check ─────────────────────────────────────────────────────
+    monthly_income = participant.monthly_income or 0
+    if monthly_income > 0 and current_month_spend > monthly_income * 0.9:
+        gap = current_month_spend - monthly_income
+        if gap > 0:
+            short_term_forecasts.append(
+                f"⚠️ You've spent ₹{current_month_spend:.0f} against a ₹{monthly_income:.0f} monthly income — "
+                f"a ₹{gap:.0f} deficit that could be drawing down savings."
+            )
+        else:
+            short_term_forecasts.append(
+                f"Spending-to-income ratio is high at {(current_month_spend/monthly_income*100):.0f}%. "
+                f"Aim to keep this under 80% (₹{monthly_income*0.8:.0f}) for healthy savings."
+            )
+
     totals_by_category: dict[str, float] = defaultdict(float)
     for item in expenses:
         if _coerce_utc(item.occurred_at).date() >= start_of_month:
@@ -132,25 +236,106 @@ def build_dashboard(session: Session, participant_id: str) -> DashboardSummary:
     projected_days_remaining = 99 if avg_daily_spend_14d == 0 else max(0, int(current_balance / avg_daily_spend_14d))
 
     highlights: list[str] = []
+
+    # ── Top category insight ─────────────────────────────────────────────────
     if top_categories:
+        top = top_categories[0]
+        pct_share = round(top.share_of_spend * 100)
         highlights.append(
-            f"{top_categories[0].category.title()} is your largest spend bucket this month at Rs {top_categories[0].total_spend:.0f}."
+            f"{top.category.title()} is your biggest spend this month at ₹{top.total_spend:.0f} ({pct_share}% of total). "
+            + ("Look for ways to trim here first." if pct_share > 40 else "Keep monitoring this category.")
         )
-    if risk_band in {"critical", "elevated"}:
+        # Second category if significant
+        if len(top_categories) >= 2 and top_categories[1].share_of_spend > 0.2:
+            cat2 = top_categories[1]
+            highlights.append(
+                f"{cat2.category.title()} is your #2 spend at ₹{cat2.total_spend:.0f} ({round(cat2.share_of_spend*100)}%). "
+                "Combined, your top 2 categories drive most of your burn."
+            )
+
+    # ── Risk / runway insights ───────────────────────────────────────────────
+    if risk_band == "critical":
         highlights.append(
-            f"At the current burn rate, your balance may feel tight within about {projected_days_remaining} days."
+            f"🚨 Critical risk: at ₹{avg_daily_spend_14d:.0f}/day you'll exhaust funds in ~{projected_days_remaining} days — "
+            f"{max(0, days_left - projected_days_remaining)} days before month-end. "
+            "Ask the Copilot for an emergency simulation now."
         )
+    elif risk_band == "elevated":
+        shortfall = round(avg_daily_spend_14d * days_left - current_balance)
+        highlights.append(
+            f"⚠️ Elevated risk: your current velocity creates a projected ₹{max(0, shortfall):.0f} shortfall this month. "
+            f"Reduce daily spend to ₹{target_daily_budget:.0f} to close the gap."
+        )
+    elif risk_band == "watch":
+        highlights.append(
+            f"🟡 On watch: runway is {projected_days_remaining} days at current pace. "
+            f"You have {days_left} days left — stay within ₹{target_daily_budget:.0f}/day to remain safe."
+        )
+    elif risk_band == "stable" and projected_days_remaining > days_left + 10:
+        highlights.append(
+            f"✅ Healthy runway: your balance can sustain {projected_days_remaining} days at current spend — "
+            f"{projected_days_remaining - days_left} days beyond month-end. Great buffer!"
+        )
+
+    # ── Checkin-based psychographic insights ────────────────────────────────
     if checkins:
         latest_checkin = sorted(checkins, key=lambda item: item.check_in_date)[-1]
         if latest_checkin.exam_pressure >= 4:
-            highlights.append("Recent check-ins show high exam pressure, which is worth tracking against impulse spending.")
+            highlights.append(
+                f"📚 High exam pressure detected in recent check-ins (score: {latest_checkin.exam_pressure}/5). "
+                "Stress and exam pressure historically correlate with 20–30% higher impulse spend. Set a spending pause today."
+            )
+        if latest_checkin.stress_level >= 4:
+            highlights.append(
+                f"😰 Stress level is high ({latest_checkin.stress_level}/5). "
+                "Consider a 24-hour spending freeze on non-essentials before your next big purchase."
+            )
+        if latest_checkin.social_pressure >= 4:
+            highlights.append(
+                f"🎉 Social pressure score is high ({latest_checkin.social_pressure}/5) in recent check-ins. "
+                "Peer spending can trigger FOMO. Set a weekend social cap to stay within your weekly target."
+            )
+        if latest_checkin.mood_energy <= 2:
+            highlights.append(
+                "😴 Low energy/mood in recent check-ins. Low-energy days often lead to convenience spending (delivery, snacks). "
+                "Prep cheap meals or snacks in advance when you feel burnout coming."
+            )
+
+    # ── Weekend warning ──────────────────────────────────────────────────────
+    if today.weekday() in {4, 5}:  # Friday or Saturday
+        highlights.append(
+            f"🗓️ It's {'Friday' if today.weekday() == 4 else 'Saturday'} — weekends are the highest-spend 2 days for most students. "
+            f"Your remaining weekly budget is ₹{max(0, target_weekly_budget - current_week_spend):.0f}. Track every spend."
+        )
+
+    # ── Savings rate ─────────────────────────────────────────────────────────
+    monthly_income = participant.monthly_income or 0
+    if monthly_income > 0:
+        savings_rate = max(0.0, (monthly_income - current_month_spend) / monthly_income * 100)
+        if savings_rate >= 20:
+            highlights.append(
+                f"💚 Savings rate: {savings_rate:.0f}% this month — above the 20% target. "
+                "Consider parking the surplus in a liquid FD or high-yield savings."
+            )
+        elif savings_rate > 0:
+            highlights.append(
+                f"💛 Savings rate: {savings_rate:.0f}% this month. Target 20% (₹{monthly_income * 0.2:.0f}) for financial resilience."
+            )
+        else:
+            highlights.append(
+                f"🔴 Savings rate: negative this month — you've spent more than your income of ₹{monthly_income:.0f}. "
+                "Deficit spending erodes your emergency buffer."
+            )
+
     if not highlights:
-        highlights.append("Start logging a week of expenses and check-ins to unlock stronger behavior insights.")
+        highlights.append(
+            "Log at least 3 expenses and 1 check-in to unlock personalized insights from the AI Copilot."
+        )
 
     # Budget tracking
-    monthly_budget = participant.monthly_budget
-    budget_used_pct = round((current_month_spend / monthly_budget) * 100, 1) if monthly_budget > 0 else 0
-    budget_remaining = round(monthly_budget - current_month_spend, 2)
+    # effective_budget was computed above as: monthly_budget + max(0.0, current_month_inflow - participant.monthly_income)
+    budget_used_pct = round((current_month_spend / effective_budget) * 100, 1) if effective_budget > 0 else 0
+    budget_remaining = round(effective_budget - current_month_spend, 2)
     if budget_used_pct >= 100:
         budget_status = "over_budget"
     elif budget_used_pct >= 80:
@@ -160,7 +345,7 @@ def build_dashboard(session: Session, participant_id: str) -> DashboardSummary:
     else:
         budget_status = "on_track"
 
-    return DashboardSummary(
+    summary = DashboardSummary(
         participant_id=participant_id,
         current_balance=current_balance,
         current_month_spend=current_month_spend,
@@ -175,7 +360,52 @@ def build_dashboard(session: Session, participant_id: str) -> DashboardSummary:
         budget_used_pct=budget_used_pct,
         budget_remaining=budget_remaining,
         budget_status=budget_status,
+        today_spend=today_spend,
+        current_week_spend=current_week_spend,
+        target_daily_budget=target_daily_budget,
+        target_weekly_budget=target_weekly_budget,
+        short_term_forecasts=short_term_forecasts,
     )
+    
+    # Generate recovery plan based on final dashboard state
+    summary.recovery_plan = _generate_recovery_plan(summary, participant)
+    return summary
+
+
+def _generate_recovery_plan(d: DashboardSummary, p: Participant) -> list[str]:
+    plan: list[str] = []
+    
+    if d.budget_remaining <= 0:
+        plan.append("🚨 Phase 1: Survival Mode — Budget is 100% depleted. Freeze all non-essential spending immediately.")
+        plan.append("  → Unsubscribe from unused streaming/app services for this month.")
+        plan.append("  → Defer any shopping or entertainment to next month's allowance.")
+        return plan
+
+    # 1. Over Today?
+    if d.today_spend > d.target_daily_budget > 0:
+        overage = d.today_spend - d.target_daily_budget
+        recovery_limit = max(0, d.target_daily_budget - (overage * 0.5))
+        plan.append(f"💪 Immediate Repair: Spend ≤ ₹{recovery_limit:.0f} tomorrow to neutralize today's ₹{overage:.0f} overage.")
+
+    # 2. Over Week?
+    if d.current_week_spend > d.target_weekly_budget > 0:
+        plan.append("🧘 Weekly Reset: Use a 'No Spend' day this weekend to reclaim 48 hours of budget.")
+
+    # 3. High category focus
+    if d.top_categories:
+        top = d.top_categories[0]
+        if top.share_of_spend > 0.4:
+            plan.append(f"✂️ Tactical Cut: Reduce {top.category.title()} spending by 30% next week — it's driving {top.share_of_spend*100:.0f}% of burn.")
+
+    # 4. Runway focus
+    if d.projected_days_remaining < 7:
+        plan.append("🚩 Runway Boost: Your current balance is dangerously low. Delay rent/bill payments (if possible) or seek a partial refund on recent large purchases.")
+
+    # 5. General health
+    if not plan and d.risk_band == "stable":
+        plan.append("✨ Maintaining: You're currently on track. Automate a ₹500 transfer to savings now to build resilience.")
+
+    return plan
 
 
 def simulate_plan(session: Session, participant_id: str, request: SimulationRequest) -> SimulationResponse:
@@ -420,8 +650,20 @@ def get_peer_comparison(session: Session, participant_id: str) -> PeerComparison
     if participant is None:
         raise ValueError("Participant not found")
 
-    all_participants = session.exec(select(Participant)).all()
-    peer_count = len(all_participants)
+    cohort_desc = f"{participant.dietary_preference.value} students in {participant.living_situation.value}"
+    cohort = session.exec(
+        select(Participant)
+        .where(Participant.living_situation == participant.living_situation)
+        .where(Participant.dietary_preference == participant.dietary_preference)
+    ).all()
+    if len(cohort) < 2:
+        cohort_desc = f"students in {participant.living_situation.value}"
+        cohort = session.exec(select(Participant).where(Participant.living_situation == participant.living_situation)).all()
+        if len(cohort) < 2:
+            cohort_desc = "all participants"
+            cohort = session.exec(select(Participant)).all()
+
+    peer_count = len(cohort)
     if peer_count < 2:
         return PeerComparisonResponse(peer_count=peer_count, comparisons=[])
 
@@ -432,7 +674,7 @@ def get_peer_comparison(session: Session, participant_id: str) -> PeerComparison
     user_spend = 0.0
     monthly_spends: list[float] = []
     monthly_budgets: list[float] = []
-    for p in all_participants:
+    for p in cohort:
         expenses = session.exec(
             select(ExpenseEntry).where(ExpenseEntry.participant_id == p.id)
         ).all()
@@ -458,7 +700,7 @@ def get_peer_comparison(session: Session, participant_id: str) -> PeerComparison
     avg_spend = sum(monthly_spends) / len(monthly_spends)
     spend_percentile = int(sum(1 for s in monthly_spends if s <= user_spend) / len(monthly_spends) * 100)
     diff_pct = int(((user_spend - avg_spend) / avg_spend) * 100) if avg_spend > 0 else 0
-    interp = f"You spend {abs(diff_pct)}% {'more' if diff_pct > 0 else 'less'} than the average participant this month."
+    interp = f"You spend {abs(diff_pct)}% {'more' if diff_pct > 0 else 'less'} than fellow {cohort_desc} this month."
     comparisons.append(PeerComparisonItem(
         metric="Monthly Spend", your_value=round(user_spend, 0),
         peer_avg=round(avg_spend, 0), percentile=spend_percentile, interpretation=interp,
@@ -477,7 +719,7 @@ def get_peer_comparison(session: Session, participant_id: str) -> PeerComparison
     cutoff_14 = datetime.now(UTC) - timedelta(days=14)
     daily_burns: list[float] = []
     user_burn = 0.0
-    for p in all_participants:
+    for p in cohort:
         recent = session.exec(
             select(ExpenseEntry)
             .where(ExpenseEntry.participant_id == p.id)

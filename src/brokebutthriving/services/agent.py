@@ -183,6 +183,70 @@ TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_expense",
+            "description": (
+                "Log a new expense for the participant automatically when they tell you they bought something. Extracts the amount, "
+                "category, and a short note from the user's message."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount": {
+                        "type": "number",
+                        "description": "The amount spent (in Rupees).",
+                    },
+                    "category": {
+                        "type": "string",
+                        "description": "The inferred category (food, transport, entertainment, shopping, bills, health, education, other).",
+                    },
+                    "merchant": {
+                        "type": "string",
+                        "description": "The inferred merchant or location (e.g. Starbucks, Zomato, BookStore).",
+                    },
+                    "note": {
+                        "type": "string",
+                        "description": "A short note about what the expense was.",
+                    },
+                },
+                "required": ["amount", "category"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_challenge",
+            "description": (
+                "Create a new gamification challenge for the user. Call this tool when predicting "
+                "or simulating a budget cut to give the user an actionable saving goal."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {
+                        "type": "string",
+                        "description": "A short, catchy title (e.g. 'Coffee Detox', 'Pizza Freeze').",
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Details about how to achieve it.",
+                    },
+                    "target_amount": {
+                        "type": "number",
+                        "description": "The target Rupee amount to save or cut back on.",
+                    },
+                    "days": {
+                        "type": "integer",
+                        "description": "How many days the challenge lasts.",
+                    },
+                },
+                "required": ["title", "description", "target_amount", "days"],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -317,9 +381,60 @@ def _exec_get_checkin_summary(
         "avg_exam_pressure": avg("exam_pressure"),
         "avg_social_pressure": avg("social_pressure"),
         "avg_mood_energy": avg("mood_energy"),
-        "avg_sleep_hours": round(sum(sleep_vals) / len(sleep_vals), 1) if sleep_vals else None,
         "latest_notes": rows[0].notes if rows[0].notes else None,
     }
+
+
+def _exec_log_expense(
+    session: Session, participant_id: str, args: dict[str, Any]
+) -> dict:
+    try:
+        from brokebutthriving.models.entities import ExpenseCategory
+        amount = float(args["amount"])
+        try:
+            category = ExpenseCategory(args["category"].lower())
+        except ValueError:
+            category = ExpenseCategory.OTHER
+            
+        entry = ExpenseEntry(
+            participant_id=participant_id,
+            occurred_at=datetime.now(UTC),
+            amount=amount,
+            category=category,
+            merchant=args.get("merchant"),
+            note=args.get("note"),
+            source="copilot",
+        )
+        session.add(entry)
+        session.commit()
+        session.refresh(entry)
+        return {"success": True, "message": f"Logged Rs {amount} for {category.value}", "entry_id": entry.id}
+    except Exception as exc:
+        return {"error": f"Failed to log expense: {str(exc)}"}
+
+
+def _exec_create_challenge(
+    session: Session, participant_id: str, args: dict[str, Any]
+) -> dict:
+    try:
+        from brokebutthriving.models.entities import Challenge, ChallengeStatus
+        import datetime
+        end_date = datetime.date.today() + datetime.timedelta(days=int(args.get("days", 7)))
+        challenge = Challenge(
+            participant_id=participant_id,
+            title=args["title"],
+            description=args["description"],
+            challenge_type="saving_goal",
+            target_value=float(args["target_amount"]),
+            status=ChallengeStatus.ACTIVE,
+            end_date=end_date,
+        )
+        session.add(challenge)
+        session.commit()
+        session.refresh(challenge)
+        return {"success": True, "message": f"Successfully created Active Challenge: {challenge.title}"}
+    except Exception as exc:
+        return {"error": f"Failed to create challenge: {str(exc)}"}
 
 
 TOOL_EXECUTORS: dict[str, Any] = {
@@ -329,6 +444,8 @@ TOOL_EXECUTORS: dict[str, Any] = {
     "run_what_if": _exec_run_what_if,
     "get_spending_by_category": _exec_get_spending_by_category,
     "get_checkin_summary": _exec_get_checkin_summary,
+    "log_expense": _exec_log_expense,
+    "create_challenge": _exec_create_challenge,
 }
 
 # ---------------------------------------------------------------------------
@@ -442,7 +559,7 @@ def run_agent(
             # like 'annotations' that some providers (e.g. Groq) reject.
             assistant_dict: dict[str, Any] = {
                 "role": "assistant",
-                "content": assistant_message.content or "",
+                "content": assistant_message.content or None,
                 "tool_calls": [
                     {
                         "id": tc.id,

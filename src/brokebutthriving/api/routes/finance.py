@@ -32,6 +32,7 @@ from brokebutthriving.schemas.api import (
     ExpenseBatchCreate,
     ExpenseEntryCreate,
     ExpenseEntryRead,
+    MLInsightsResponse,
     MoodSpendingResponse,
     PeerComparisonResponse,
     RecurringEntryCreate,
@@ -53,6 +54,7 @@ from brokebutthriving.services.analytics import (
     simulate_plan,
 )
 from brokebutthriving.services.categorizer import auto_categorize, parse_sms_messages
+from brokebutthriving.services.ml_scorer import score_participant
 
 router = APIRouter(prefix="/participants/{participant_id}/finance", tags=["finance"])
 
@@ -192,6 +194,65 @@ def get_dashboard(
 ) -> DashboardSummary:
     _ensure_participant(session, participant_id)
     return build_dashboard(session, participant_id)
+
+
+# ---------------------------------------------------------------------------
+# ML Insights
+# ---------------------------------------------------------------------------
+
+@router.get("/ml-insights", response_model=MLInsightsResponse)
+def get_ml_insights(
+    participant_id: str,
+    session: Session = Depends(get_session),
+) -> MLInsightsResponse:
+    """Return ML-powered financial insights: wellbeing score, hardship risk,
+    bill difficulty risk, spending archetype, and spend ratios."""
+    participant = _ensure_participant(session, participant_id)
+
+    from brokebutthriving.models.entities import BehaviorSurvey
+    expenses = session.exec(
+        select(ExpenseEntry).where(ExpenseEntry.participant_id == participant_id)
+    ).all()
+    cashflows = session.exec(
+        select(CashflowEntry).where(CashflowEntry.participant_id == participant_id)
+    ).all()
+    checkins = session.exec(
+        select(DailyCheckIn).where(DailyCheckIn.participant_id == participant_id)
+    ).all()
+    surveys = session.exec(
+        select(BehaviorSurvey).where(BehaviorSurvey.participant_id == participant_id)
+    ).all()
+
+    # Get risk_band and avg_daily_spend from the existing dashboard builder
+    from brokebutthriving.services.analytics import build_dashboard
+    dash = build_dashboard(session, participant_id)
+    risk_band = dash.risk_band
+    avg_daily_spend_14d = dash.average_daily_spend_14d
+
+    insights = score_participant(
+        participant=participant,
+        expenses=list(expenses),
+        cashflows=list(cashflows),
+        checkins=list(checkins),
+        surveys=list(surveys),
+        risk_band=risk_band,
+        avg_daily_spend_14d=avg_daily_spend_14d,
+    )
+
+    return MLInsightsResponse(
+        model_available=insights.model_available,
+        wellbeing_score=insights.wellbeing_score,
+        wellbeing_band=insights.wellbeing_band,
+        hardship_risk=insights.hardship_risk,
+        hardship_band=insights.hardship_band,
+        bill_difficulty_risk=insights.bill_difficulty_risk,
+        bill_difficulty_band=insights.bill_difficulty_band,
+        spending_archetype=insights.spending_archetype,
+        archetype_confidence=insights.archetype_confidence,
+        discretionary_ratio=insights.discretionary_ratio,
+        spend_to_income_ratio=insights.spend_to_income_ratio,
+        insights=insights.insights,
+    )
 
 
 @router.post("/simulation", response_model=SimulationResponse)

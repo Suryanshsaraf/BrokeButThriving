@@ -7,8 +7,8 @@ export type ExpenseCategory =
   | 'travel' | 'social' | 'emergency' | 'other';
 
 export type CashflowCategory =
-  | 'allowance' | 'part_time_job' | 'scholarship'
-  | 'freelance' | 'refund' | 'gift' | 'other';
+  | 'allowance' | 'salary' | 'freelance'
+  | 'scholarship' | 'refund' | 'transfer' | 'other';
 
 export type LivingSituation = 'hostel' | 'pg' | 'with_family' | 'rental' | 'other';
 export type DietPreference = 'veg' | 'non_veg' | 'vegan' | 'eggetarian' | 'other';
@@ -130,6 +130,13 @@ export interface DashboardSummary {
   budget_used_pct: number;
   budget_remaining: number;
   budget_status: string;
+  // Tactical Breakdowns (new)
+  today_spend: number;
+  current_week_spend: number;
+  target_daily_budget: number;
+  target_weekly_budget: number;
+  short_term_forecasts: string[];
+  recovery_plan: string[];
 }
 
 // Simulation
@@ -299,4 +306,26 @@ export interface ChatRequest {
 export interface ChatResponse {
   reply: string;
   tools_used: string[];
+}
+
+// ML Insights
+export interface MLInsightsResponse {
+  model_available: boolean;
+  // Wellbeing
+  wellbeing_score: number | null;
+  wellbeing_band: 'low' | 'moderate' | 'good' | 'excellent' | null;
+  // Hardship
+  hardship_risk: number | null;
+  hardship_band: 'low' | 'moderate' | 'high' | 'critical' | null;
+  // Bill difficulty
+  bill_difficulty_risk: number | null;
+  bill_difficulty_band: 'low' | 'moderate' | 'high' | null;
+  // Spending archetype
+  spending_archetype: 'stress' | 'social_pressure' | 'boredom' | 'balanced' | null;
+  archetype_confidence: number | null;
+  // Financial ratios
+  discretionary_ratio: number | null;
+  spend_to_income_ratio: number | null;
+  // Narrative
+  insights: string[];
 }

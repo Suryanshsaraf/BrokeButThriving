@@ -40,8 +40,21 @@ export default function OnboardingPage({ onComplete }: Props) {
         starting_balance: Number(balance),
       });
       onComplete(p.id);
-    } catch {
-      setStatus('❌ Failed to create participant. Check your inputs.');
+    } catch (err: any) {
+      let msg = 'Please check your inputs and try again.';
+      if (err instanceof Error) {
+        const text = err.message;
+        if (text.includes('409') || text.includes('already exists')) {
+          msg = 'That Participant Code is already taken! Try adding some numbers to it.';
+        } else if (text.includes('502') || text.includes('Failed to fetch')) {
+          msg = 'The backend server is offline or restarting. Please wait a moment and try again.';
+        } else if (text.includes('422')) {
+          msg = 'Some of your details are invalid. Ensure all fields are correctly filled out.';
+        } else {
+          msg = 'An unexpected error occurred. Please try again.';
+        }
+      }
+      setStatus(`❌ ${msg}`);
     }
   };
 

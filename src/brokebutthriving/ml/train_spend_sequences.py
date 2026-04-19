@@ -222,11 +222,13 @@ def _regression_metrics(targets: np.ndarray, predictions: np.ndarray) -> dict[st
 
 def _dataset_tensor(
     sequence_features: np.ndarray,
+    static_features: np.ndarray,
     regression_targets: np.ndarray,
     classification_targets: np.ndarray,
 ) -> TensorDataset:
     return TensorDataset(
         torch.tensor(sequence_features, dtype=torch.float32),
+        torch.tensor(static_features, dtype=torch.float32),
         torch.tensor(regression_targets, dtype=torch.float32),
         torch.tensor(classification_targets, dtype=torch.float32),
     )
@@ -234,16 +236,21 @@ def _dataset_tensor(
 
 def train_sequence_model(
     train_sequence_features: np.ndarray,
+    train_static_features: np.ndarray,
     train_regression_targets: np.ndarray,
     train_classification_targets: np.ndarray,
     val_sequence_features: np.ndarray,
+    val_static_features: np.ndarray,
     val_regression_targets: np.ndarray,
     val_classification_targets: np.ndarray,
     seed: int,
 ) -> tuple[SpendSequenceModel, list[dict[str, float]]]:
     _set_seed(seed)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = SpendSequenceModel(input_dim=train_sequence_features.shape[2]).to(device)
+    model = SpendSequenceModel(
+        input_dim=train_sequence_features.shape[2],
+        static_dim=train_static_features.shape[1],
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
 
     positive_count = max(float(train_classification_targets.sum()), 1.0)
@@ -256,6 +263,7 @@ def train_sequence_model(
     train_loader = DataLoader(
         _dataset_tensor(
             train_sequence_features,
+            train_static_features,
             train_regression_targets,
             train_classification_targets,
         ),
@@ -265,6 +273,7 @@ def train_sequence_model(
     val_loader = DataLoader(
         _dataset_tensor(
             val_sequence_features,
+            val_static_features,
             val_regression_targets,
             val_classification_targets,
         ),
@@ -281,13 +290,14 @@ def train_sequence_model(
         model.train()
         train_loss_total = 0.0
         train_batches = 0
-        for sequence_batch, regression_batch, classification_batch in train_loader:
+        for sequence_batch, static_batch, regression_batch, classification_batch in train_loader:
             sequence_batch = sequence_batch.to(device)
+            static_batch = static_batch.to(device)
             regression_batch = regression_batch.to(device)
             classification_batch = classification_batch.to(device)
 
             optimizer.zero_grad()
-            outputs = model(sequence_batch)
+            outputs = model(sequence_batch, static_features=static_batch)
             loss = regression_loss_fn(outputs["next_total_spend"], regression_batch) + classification_loss_fn(
                 outputs["high_burn_logit"], classification_batch
             )
@@ -300,11 +310,12 @@ def train_sequence_model(
         val_loss_total = 0.0
         val_batches = 0
         with torch.no_grad():
-            for sequence_batch, regression_batch, classification_batch in val_loader:
+            for sequence_batch, static_batch, regression_batch, classification_batch in val_loader:
                 sequence_batch = sequence_batch.to(device)
+                static_batch = static_batch.to(device)
                 regression_batch = regression_batch.to(device)
                 classification_batch = classification_batch.to(device)
-                outputs = model(sequence_batch)
+                outputs = model(sequence_batch, static_features=static_batch)
                 loss = regression_loss_fn(outputs["next_total_spend"], regression_batch) + classification_loss_fn(
                     outputs["high_burn_logit"], classification_batch
                 )
@@ -330,10 +341,15 @@ def train_sequence_model(
     return model, history
 
 
-def predict_sequence_model(model: SpendSequenceModel, sequence_features: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def predict_sequence_model(
+    model: SpendSequenceModel, sequence_features: np.ndarray, static_features: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     device = next(model.parameters()).device
     loader = DataLoader(
-        TensorDataset(torch.tensor(sequence_features, dtype=torch.float32)),
+        TensorDataset(
+            torch.tensor(sequence_features, dtype=torch.float32),
+            torch.tensor(static_features, dtype=torch.float32),
+        ),
         batch_size=DEFAULT_BATCH_SIZE,
         shuffle=False,
     )
@@ -342,8 +358,8 @@ def predict_sequence_model(model: SpendSequenceModel, sequence_features: np.ndar
 
     model.eval()
     with torch.inference_mode():
-        for (sequence_batch,) in loader:
-            outputs = model(sequence_batch.to(device))
+        for sequence_batch, static_batch in loader:
+            outputs = model(sequence_batch.to(device), static_features=static_batch.to(device))
             regression_predictions.append(outputs["next_total_spend"].cpu().numpy())
             class_probabilities.append(torch.sigmoid(outputs["high_burn_logit"]).cpu().numpy())
 
@@ -375,6 +391,7 @@ def run_spend_sequence_training(
         categorical_features=categorical_features,
     )
     train_flat = flat_preprocessor.fit_transform(train_frame[flat_feature_columns])
+    val_flat = flat_preprocessor.transform(val_frame[flat_feature_columns])
     test_flat = flat_preprocessor.transform(test_frame[flat_feature_columns])
 
     sequence_scaler = SequenceFeatureScaler(lag_prefixes=lag_prefixes, base_features=BLS_SEQUENCE_BASE_FEATURES)
@@ -439,14 +456,16 @@ def run_spend_sequence_training(
 
     sequence_model, training_history = train_sequence_model(
         train_sequence_features=train_sequence,
+        train_static_features=train_flat,
         train_regression_targets=train_regression,
         train_classification_targets=train_classification,
         val_sequence_features=val_sequence,
+        val_static_features=val_flat,
         val_regression_targets=val_regression,
         val_classification_targets=val_classification,
         seed=seed,
     )
-    predicted_log, sequence_probabilities = predict_sequence_model(sequence_model, test_sequence)
+    predicted_log, sequence_probabilities = predict_sequence_model(sequence_model, test_sequence, test_flat)
     predicted_raw = np.expm1(predicted_log)
     regression_metrics["lstm"] = _regression_metrics(test_regression_raw, predicted_raw)
     classification_metrics["lstm"] = _classification_metrics(

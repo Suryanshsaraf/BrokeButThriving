@@ -140,6 +140,13 @@ class DashboardSummary(BaseModel):
     budget_used_pct: float = 0
     budget_remaining: float = 0
     budget_status: str = "on_track"
+    # Tactical Breakdowns (new)
+    today_spend: float = 0
+    current_week_spend: float = 0
+    target_daily_budget: float = 0
+    target_weekly_budget: float = 0
+    short_term_forecasts: list[str] = Field(default_factory=list)
+    recovery_plan: list[str] = Field(default_factory=list)
 
 
 class SimulationRequest(BaseModel):
@@ -383,6 +390,37 @@ class ModelRegistrySummary(BaseModel):
     note: str
     missing_artifacts: list[str]
     tasks: list[TrainedModelTask]
+
+
+# ---------------------------------------------------------------------------
+# ML Insights
+# ---------------------------------------------------------------------------
+
+class MLInsightsResponse(BaseModel):
+    model_available: bool
+
+    # Wellbeing
+    wellbeing_score: float | None = None        # 0–100
+    wellbeing_band: str | None = None           # low / moderate / good / excellent
+
+    # Hardship
+    hardship_risk: float | None = None          # 0–1 probability
+    hardship_band: str | None = None            # low / moderate / high / critical
+
+    # Bill difficulty
+    bill_difficulty_risk: float | None = None   # 0–1 probability
+    bill_difficulty_band: str | None = None     # low / moderate / high
+
+    # Spending archetype
+    spending_archetype: str | None = None       # stress | social_pressure | boredom | balanced
+    archetype_confidence: float | None = None   # 0–1
+
+    # Financial ratios
+    discretionary_ratio: float | None = None    # share of spend that is optional
+    spend_to_income_ratio: float | None = None  # monthly spend / monthly income
+
+    # Narrative insights
+    insights: list[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

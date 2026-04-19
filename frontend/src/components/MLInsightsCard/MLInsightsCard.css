@@ -1,0 +1,409 @@
+/* ── MLInsightsCard Styles ─────────────────────────────────────────── */
+
+.ml-card {
+  background: rgba(10, 10, 10, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  position: relative;
+  overflow: hidden;
+}
+
+.ml-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at top left, rgba(92, 214, 160, 0.04), transparent 60%);
+  pointer-events: none;
+}
+
+/* ── Header ── */
+.ml-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ml-badge {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: #5cd6a0;
+  background: rgba(92, 214, 160, 0.1);
+  border: 1px solid rgba(92, 214, 160, 0.2);
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.ml-hint {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.25);
+  letter-spacing: 0.03em;
+}
+
+/* ── Top row ── */
+.ml-top-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.ml-vdivider {
+  width: 1px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+/* ── Wellbeing Gauge ── */
+.ml-wellbeing {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.ml-wellbeing-label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ml-gauge {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.ml-gauge-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 6;
+}
+
+.ml-gauge-fill {
+  fill: none;
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  filter: drop-shadow(0 0 4px currentColor);
+}
+
+.ml-gauge-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ml-gauge-value {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.ml-gauge-sub {
+  font-size: 9px;
+  opacity: 0.5;
+  text-transform: capitalize;
+  margin-top: 2px;
+}
+
+/* ── Archetype ── */
+.ml-archetype {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.ml-archetype-emoji {
+  font-size: 26px;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.ml-archetype-emoji:hover {
+  transform: scale(1.08);
+}
+
+.ml-archetype-name {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.ml-archetype-conf {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-top: 3px;
+}
+
+/* ── Section ── */
+.ml-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ml-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.ml-section-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Risk bars ── */
+.ml-risks {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ml-risk-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  gap: 4px 8px;
+  align-items: center;
+}
+
+.ml-risk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ml-risk-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.ml-risk-badge {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 2px 8px;
+  border-radius: 10px;
+  letter-spacing: 0.03em;
+}
+
+.ml-risk-track {
+  grid-column: 1 / 2;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.ml-risk-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.ml-risk-pct {
+  grid-column: 2 / 3;
+  grid-row: 2 / 3;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  text-align: right;
+}
+
+/* ── Ratio pills ── */
+.ml-pills {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ml-pill {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: border-color 0.2s ease;
+}
+
+.ml-pill-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.ml-pill-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* ── Insights list ── */
+.ml-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ml-insight-item {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.65);
+  padding: 8px 12px;
+  background: rgba(245, 166, 91, 0.05);
+  border-left: 2px solid rgba(245, 166, 91, 0.4);
+  border-radius: 0 6px 6px 0;
+}
+
+.ml-insight-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f5a65b;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+/* ── Loading shimmer ── */
+.ml-loading {
+  gap: 14px;
+}
+
+.ml-shimmer {
+  height: 18px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.ml-shimmer.short { width: 60%; }
+
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Unavailable state ── */
+.ml-unavailable {
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+  text-align: center;
+  gap: 12px;
+}
+
+.ml-unavail-icon {
+  font-size: 32px;
+  filter: grayscale(1);
+  opacity: 0.4;
+}
+
+.ml-unavail-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  max-width: 260px;
+  line-height: 1.5;
+}
+
+/* ── Benchmark comparison bar ── */
+.ml-benchmark-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ml-benchmark-track {
+  position: relative;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: visible;
+}
+
+.ml-benchmark-fill {
+  height: 100%;
+  border-radius: 10px;
+  transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0.9;
+}
+
+/* The national median marker line */
+.ml-benchmark-median {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 2px;
+}
+
+.ml-benchmark-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+/* ── Improved insight items for longer text ── */
+.ml-insight-item {
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0 6px 6px 0;
+  transition: background 0.2s ease;
+}
+
+.ml-insight-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ml-insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.ml-insights-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ml-insights-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}

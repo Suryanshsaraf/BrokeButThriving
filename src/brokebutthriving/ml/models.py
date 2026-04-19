@@ -8,6 +8,7 @@ class MultiTaskSequenceModel(nn.Module):
     def __init__(
         self,
         input_dim: int,
+        static_dim: int = 0,
         hidden_dim: int = 96,
         num_layers: int = 2,
         dropout: float = 0.25,
@@ -22,7 +23,7 @@ class MultiTaskSequenceModel(nn.Module):
         )
         self.norm = nn.LayerNorm(hidden_dim)
         self.shared = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim + static_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
         )
@@ -30,9 +31,13 @@ class MultiTaskSequenceModel(nn.Module):
         self.archetype_head = nn.Linear(hidden_dim, 3)
         self.spend_head = nn.Linear(hidden_dim, 1)
 
-    def forward(self, features: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(
+        self, features: torch.Tensor, static_features: torch.Tensor | None = None
+    ) -> dict[str, torch.Tensor]:
         encoded, _ = self.encoder(features)
         pooled = self.norm(encoded[:, -1, :])
+        if static_features is not None:
+            pooled = torch.cat([pooled, static_features], dim=-1)
         shared = self.shared(pooled)
         return {
             "risk_logits": self.risk_head(shared).squeeze(-1),
@@ -75,6 +80,7 @@ class SpendSequenceModel(nn.Module):
     def __init__(
         self,
         input_dim: int,
+        static_dim: int = 0,
         hidden_dim: int = 96,
         num_layers: int = 2,
         dropout: float = 0.25,
@@ -89,16 +95,20 @@ class SpendSequenceModel(nn.Module):
         )
         self.norm = nn.LayerNorm(hidden_dim)
         self.shared = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(hidden_dim + static_dim, hidden_dim),
             nn.ReLU(),
             nn.Dropout(dropout),
         )
         self.regression_head = nn.Linear(hidden_dim, 1)
         self.classification_head = nn.Linear(hidden_dim, 1)
 
-    def forward(self, features: torch.Tensor) -> dict[str, torch.Tensor]:
+    def forward(
+        self, features: torch.Tensor, static_features: torch.Tensor | None = None
+    ) -> dict[str, torch.Tensor]:
         encoded, _ = self.encoder(features)
         pooled = self.norm(encoded[:, -1, :])
+        if static_features is not None:
+            pooled = torch.cat([pooled, static_features], dim=-1)
         shared = self.shared(pooled)
         return {
             "next_total_spend": self.regression_head(shared).squeeze(-1),

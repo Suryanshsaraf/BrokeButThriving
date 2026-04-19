@@ -38,6 +38,7 @@ export default function SettingsPage({ participantId }: Props) {
   // Allocations
   const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [allocTotal, setAllocTotal] = useState(0);
+  const [lockedCats, setLockedCats] = useState<Set<string>>(new Set());
 
   const handleAllocationChange = (category: string, newAmount: number) => {
     const oldAmount = allocations[category] || 0;
@@ -48,14 +49,18 @@ export default function SettingsPage({ participantId }: Props) {
     const newAlloc = { ...allocations };
     newAlloc[category] = newAmount;
 
+    const newLocked = new Set(lockedCats);
+    newLocked.add(category);
+    setLockedCats(newLocked);
+
     const nonEssentials = ['entertainment', 'shopping', 'travel'];
-    const essentials = ['food', 'health', 'utilities'];
+    const essentials = ['rent', 'food', 'health', 'utilities'];
     
     // If increased, reduce non-essentials first. If decreased, give back to essentials first.
     const targets = diff > 0 ? [...nonEssentials, ...essentials] : [...essentials, ...nonEssentials];
 
     for (const target of targets) {
-      if (target === category) continue;
+      if (target === category || newLocked.has(target)) continue;
       if (remainingDiff === 0) break;
 
       if (diff > 0) {
@@ -435,7 +440,30 @@ export default function SettingsPage({ participantId }: Props) {
             {['rent', 'food', 'travel', 'utilities', 'health', 'entertainment', 'shopping'].map((cat) => (
               <div key={cat} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
-                  <strong style={{ textTransform: 'capitalize' }}>{cat}</strong>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <button 
+                      type="button"
+                      style={{ 
+                        background: 'none', 
+                        border: 'none', 
+                        cursor: 'pointer', 
+                        padding: 0, 
+                        fontSize: 14,
+                        opacity: lockedCats.has(cat) ? 1 : 0.4 
+                      }}
+                      onClick={() => {
+                        setLockedCats(prev => {
+                          const next = new Set(prev);
+                          if (next.has(cat)) next.delete(cat);
+                          else next.add(cat);
+                          return next;
+                        });
+                      }}
+                    >
+                      {lockedCats.has(cat) ? '🔒' : '🔓'}
+                    </button>
+                    <strong style={{ textTransform: 'capitalize' }}>{cat}</strong>
+                  </div>
                   <span>₹{allocations[cat] ? Math.round(allocations[cat]) : 0}</span>
                 </div>
                 <input 

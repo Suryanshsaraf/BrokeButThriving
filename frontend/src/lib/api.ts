@@ -15,6 +15,7 @@ import type {
   ExpenseEntryRead,
   GamificationSummary,
   ChallengeRead,
+  MLInsightsResponse,
   ParticipantCreate,
   ParticipantRead,
   MoodSpendingResponse,
@@ -52,6 +53,8 @@ export const createParticipant = (data: ParticipantCreate) =>
 export const getParticipant = (id: string) => request<ParticipantRead>(`/participants/${id}`);
 export const updateParticipant = (id: string, data: ParticipantUpdate) =>
   request<ParticipantRead>(`/participants/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+export const deleteParticipant = (id: string) =>
+  fetch(`${BASE}/participants/${id}`, { method: 'DELETE' });
 
 // Survey
 export const upsertSurvey = (pid: string, data: BehaviorSurveyCreate) =>
@@ -127,3 +130,7 @@ export const sendChat = (pid: string, message: string, history: { role: string; 
     body: JSON.stringify({ message, history, category_budgets }) 
   });
 };
+
+// ML Insights
+export const getMLInsights = (pid: string) =>
+  request<MLInsightsResponse>(`/participants/${pid}/finance/ml-insights`);
