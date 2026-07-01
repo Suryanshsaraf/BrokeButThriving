@@ -1,4 +1,3 @@
-import React from 'react';
 import './Dock.css';
 
 interface DockProps {
