@@ -1,3 +1,4 @@
+"""System configuration settings loaded from environment or local defaults."""
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
