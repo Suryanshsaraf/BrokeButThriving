@@ -1,3 +1,4 @@
+"""Main FastAPI module for running Broke But Thriving API Server."""
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
