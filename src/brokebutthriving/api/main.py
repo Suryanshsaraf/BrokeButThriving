@@ -22,6 +22,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Initialize database schemas and tables on startup
     @app.on_event("startup")
     def on_startup() -> None:
         create_db_and_tables()
