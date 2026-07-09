@@ -1,3 +1,4 @@
+"""Database core connection configuration and session dependencies."""
 from collections.abc import Generator
 
 from sqlmodel import Session, SQLModel, create_engine
