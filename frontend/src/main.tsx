@@ -1,3 +1,4 @@
+/* React application entrypoint with strict rendering mode */
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
